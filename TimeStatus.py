@@ -1,18 +1,43 @@
-import requests as r, customtkinter as ctk, threading, time, dotenv, os, json
+import requests as r, customtkinter as ctk, threading, time, dotenv, os, json, io, contextlib
 from datetime import datetime as dt
 
-dotenv.load_dotenv()
+dotenv.load_dotenv(r"ABotmo\.env")
 ctk.set_appearance_mode("dark")
 
 primaryGreen = "#0bda51"
 secondaryGreen = "#06420b"
+ns = {
+    "datetime": dt,
+    "requests": r,
+    "time": time,
+    "os": os,
+    "json": json
+}
 
 status = "online"
 customText = ""
+code = False
+codeSnippet = ""
+
+def getCodeResult(text: str) -> str:
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            exec(text, ns)
+        if "result" in ns:
+            return str(ns["result"])
+        else:
+            return buf.getvalue().strip()
+    except Exception as e:
+        print(f"Error: {e}")
+        return ""
 
 def changeStatus() -> None:
     now = dt.now().strftime("[ %H : %M ]")
-    if customText and customText != "": t = f"{now} // {customText}"
+    if customText and customText != "":
+        temp = customText
+        if code: temp = getCodeResult(codeSnippet);
+        t = f"{now} // {temp}"
     else: t = f"It's {now} for me"
     res = r.patch("https://discord.com/api/v10/users/@me/settings?", headers={"Content-Type": "application/json", "Authorization": os.getenv("ACCTOKEN")},
            data=json.dumps({
@@ -37,9 +62,18 @@ def Main() -> None:
 
 class App(ctk.CTk):
     def Update(self) -> None:
-        global customText, status
+        global customText, status, code, codeSnippet
         status = self.Status.get()
-        customText = self.ExtraText.get("1.0", "128.0").strip()
+        extraTxt = self.ExtraText.get("1.0", "128.0").strip()
+        codeSnippet = ""
+        code = False
+        if extraTxt.startswith("code "):
+            snippet = extraTxt[5:]
+            code = True
+            codeSnippet = snippet
+            customText = getCodeResult(snippet)
+        else:
+            customText = extraTxt
         changeStatus()
 
     def __init__(self):
